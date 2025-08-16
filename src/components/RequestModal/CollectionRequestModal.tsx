@@ -7,18 +7,18 @@ import AdvancedRequester from '@app/components/RequestModal/AdvancedRequester';
 import QuotaDisplay from '@app/components/RequestModal/QuotaDisplay';
 import { useUser } from '@app/hooks/useUser';
 import globalMessages from '@app/i18n/globalMessages';
+import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
 import { MediaRequestStatus, MediaStatus } from '@server/constants/media';
 import type { MediaRequest } from '@server/entity/MediaRequest';
 import type { QuotaResponse } from '@server/interfaces/api/userInterfaces';
 import { Permission } from '@server/lib/permissions';
 import type { Collection } from '@server/models/Collection';
+import type { MovieDetails } from '@server/models/Movie';
 import axios from 'axios';
 import { useCallback, useEffect, useState } from 'react';
 import { defineMessages, useIntl } from 'react-intl';
 import { useToasts } from 'react-toast-notifications';
-import useSWR from 'swr';
-import { ANIME_KEYWORD_ID } from '@server/api/themoviedb/constants';
-import type { MovieDetails } from '@server/models/Movie';
+import useSWR, { mutate } from 'swr';
 
 const messages = defineMessages({
   requestadmin: 'This request will be approved automatically.',
@@ -80,7 +80,8 @@ const CollectionRequestModal = ({
             .filter(
               (request) =>
                 request.is4k === is4k &&
-                request.status !== MediaRequestStatus.DECLINED
+                request.status !== MediaRequestStatus.DECLINED &&
+                request.status !== MediaRequestStatus.COMPLETED
             )
             .map((part) => part.id),
         ];
@@ -169,7 +170,9 @@ const CollectionRequestModal = ({
 
     return (part?.mediaInfo?.requests ?? []).find(
       (request) =>
-        request.is4k === is4k && request.status !== MediaRequestStatus.DECLINED
+        request.is4k === is4k &&
+        request.status !== MediaRequestStatus.DECLINED &&
+        request.status !== MediaRequestStatus.COMPLETED
     );
   };
 
@@ -200,7 +203,9 @@ const CollectionRequestModal = ({
         (
           data?.parts.filter((part) => selectedParts.includes(part.id)) ?? []
         ).map(async (part) => {
-          const movieData = await axios.get<MovieDetails>(`/api/v1/movie/${part.id}`);
+          const movieData = await axios.get<MovieDetails>(
+            `/api/v1/movie/${part.id}`
+          );
           const isAnime = movieData.data.keywords.some(
             (keyword) => keyword.id === ANIME_KEYWORD_ID
           );
@@ -221,6 +226,7 @@ const CollectionRequestModal = ({
             ? MediaStatus.UNKNOWN
             : MediaStatus.PARTIALLY_AVAILABLE
         );
+        mutate('/api/v1/request/count');
       }
 
       addToast(
@@ -240,7 +246,16 @@ const CollectionRequestModal = ({
     } finally {
       setIsUpdating(false);
     }
-  }, [requestOverrides, data, onComplete, addToast, intl, selectedParts, is4k]);
+  }, [
+    requestOverrides,
+    data?.parts,
+    data?.name,
+    onComplete,
+    addToast,
+    intl,
+    selectedParts,
+    is4k,
+  ]);
 
   const hasAutoApprove = hasPermission(
     [
@@ -352,7 +367,9 @@ const CollectionRequestModal = ({
                     const partMedia =
                       part.mediaInfo &&
                       part.mediaInfo[is4k ? 'status4k' : 'status'] !==
-                        MediaStatus.UNKNOWN
+                        MediaStatus.UNKNOWN &&
+                      part.mediaInfo[is4k ? 'status4k' : 'status'] !==
+                        MediaStatus.DELETED
                         ? part.mediaInfo
                         : undefined;
 
