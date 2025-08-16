@@ -567,7 +567,9 @@ export class MediaRequest {
 
     try {
       const mediaType = entity.type === MediaType.MOVIE ? 'Movie' : 'Series';
-      const prefix = entity.isAnime ? 'Anime ' : entity.is4k ? '4K ' : '';
+      const prefix = `${entity.isAnime ? 'Anime ' : ''}${
+        entity.is4k ? '4K ' : ''
+      }`;
 
       let event: string | undefined;
       let notifyAdmin = true;
